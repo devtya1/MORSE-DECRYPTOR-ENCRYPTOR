@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>RAW Morse Intelligence Console</title>
+
+<style>
+:root {
+  --bg: #05070a;
+  --panel: #0b0f17;
+  --accent: #00f5ff;
+  --text: #dfefff;
+  --muted: #6b7a90;
+  --danger: #ff3355;
+  --radius: 14px;
+  --mono: "JetBrains Mono", Consolas, monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  font-family: var(--mono);
+  background: radial-gradient(1200px 600px at top, #0c1220, var(--bg));
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.container {
+  width: 100%;
+  max-width: 900px;
+  padding: 20px;
+}
+
+.panel {
+  background: linear-gradient(180deg, #0e1422, var(--panel));
+  border: 1px solid rgba(0,245,255,0.15);
+  border-radius: var(--radius);
+  padding: 24px;
+  box-shadow: 0 0 60px rgba(0,245,255,0.05);
+}
+
+.header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+
+.brand {
+  font-size: 0.85rem;
+  letter-spacing: 0.2em;
+  color: var(--accent);
+}
+
+.mode {
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+textarea {
+  width: 100%;
+  min-height: 140px;
+  resize: vertical;
+  background: #05070f;
+  border: 1px solid rgba(0,245,255,0.2);
+  border-radius: 10px;
+  padding: 14px;
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 0.9rem;
+  outline: none;
+}
+
+textarea:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px rgba(0,245,255,0.4);
+}
+
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 16px 0;
+}
+
+button {
+  background: transparent;
+  border: 1px solid rgba(0,245,255,0.4);
+  color: var(--accent);
+  padding: 10px 18px;
+  border-radius: 10px;
+  cursor: pointer;
+  font-family: var(--mono);
+  transition: all 0.2s ease;
+}
+
+button:hover {
+  background: rgba(0,245,255,0.1);
+}
+
+button.primary {
+  background: var(--accent);
+  color: #001014;
+  border-color: var(--accent);
+}
+
+.output {
+  margin-top: 14px;
+  padding: 16px;
+  background: #04060b;
+  border-radius: 10px;
+  border: 1px solid rgba(0,245,255,0.15);
+  min-height: 80px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 0.9rem;
+}
+
+.footer {
+  margin-top: 18px;
+  font-size: 0.7rem;
+  color: var(--muted);
+  text-align: center;
+  letter-spacing: 0.15em;
+}
+
+@media (max-width: 600px) {
+  .header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+</style>
+</head>
+
+<body>
+<div class="container">
+  <div class="panel">
+    <div class="header">
+      <div class="brand">RESEARCH & ANALYSIS WING</div>
+      <div class="mode" id="modeLabel">MODE: MORSE → TEXT</div>
+    </div>
+
+    <textarea
+      id="input"
+      placeholder="Paste Morse code here (use . and -, separate letters by space, words by /)"
+    ></textarea>
+
+    <div class="controls">
+      <button class="primary" id="convertBtn">DECODE</button>
+      <button id="toggleBtn">SWITCH MODE</button>
+      <button id="clearBtn">CLEAR</button>
+    </div>
+
+    <div class="output" id="output"></div>
+
+    <div class="footer">
+      CLASSIFIED • OFFLINE • ZERO-TRACE INTERFACE
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+  "use strict";
+
+  const morseMap = {
+    ".-":"A","-...":"B","-.-.":"C","-..":"D",".":"E",
+    "..-.":"F","--.":"G","....":"H","..":"I",
+    ".---":"J","-.-":"K",".-..":"L","--":"M",
+    "-.":"N","---":"O",".--.":"P","--.-":"Q",
+    ".-.":"R","...":"S","-":"T","..-":"U",
+    "...-":"V",".--":"W","-..-":"X","-.--":"Y",
+    "--..":"Z",
+    "-----":"0",".----":"1","..---":"2","...--":"3",
+    "....-":"4",".....":"5","-....":"6","--...":"7",
+    "---..":"8","----.":"9"
+  };
+
+  const textMap = Object.fromEntries(
+    Object.entries(morseMap).map(([k,v]) => [v,k])
+  );
+
+  const input = document.getElementById("input");
+  const output = document.getElementById("output");
+  const convertBtn = document.getElementById("convertBtn");
+  const toggleBtn = document.getElementById("toggleBtn");
+  const clearBtn = document.getElementById("clearBtn");
+  const modeLabel = document.getElementById("modeLabel");
+
+  let morseToText = true;
+  let typingTimer = null;
+
+  function typeWriter(text) {
+    output.textContent = "";
+    let i = 0;
+    clearInterval(typingTimer);
+    typingTimer = setInterval(() => {
+      if (i >= text.length) {
+        clearInterval(typingTimer);
+        return;
+      }
+      output.textContent += text.charAt(i++);
+    }, 18);
+  }
+
+ function decodeMorse(value) {
+  return value
+    .trim()
+    .split(/\n+/)                 // preserve line breaks
+    .map(line =>
+      line
+        .trim()
+        .split(/\s*\/\s*/)         // words
+        .map(word =>
+          word
+            .trim()
+            .split(/\s+/)          // letters
+            .map(symbol => morseMap[symbol] || "�")
+            .join("")
+        )
+        .join(" ")
+    )
+    .join("\n");
+}
+
+
+  function encodeText(value) {
+    return value
+      .toUpperCase()
+      .replace(/[^A-Z0-9 ]/g, "")
+      .split(" ")
+      .map(word =>
+        word.split("").map(c => textMap[c] || "").join(" ")
+      )
+      .join(" / ");
+  }
+
+  convertBtn.addEventListener("click", () => {
+    const val = input.value;
+    if (!val.trim()) return;
+    const result = morseToText ? decodeMorse(val) : encodeText(val);
+    typeWriter(result || "[NO VALID OUTPUT]");
+  });
+
+  toggleBtn.addEventListener("click", () => {
+    morseToText = !morseToText;
+    modeLabel.textContent = morseToText
+      ? "MODE: MORSE → TEXT"
+      : "MODE: TEXT → MORSE";
+    convertBtn.textContent = morseToText ? "DECODE" : "ENCODE";
+    input.placeholder = morseToText
+      ? "Paste Morse code here (letters by space, words by /)"
+      : "Paste plain text here";
+    output.textContent = "";
+  });
+
+  clearBtn.addEventListener("click", () => {
+    input.value = "";
+    output.textContent = "";
+  });
+})();
+</script>
+</body>
+</html>
